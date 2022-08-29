@@ -1,14 +1,10 @@
-import Homey from 'homey';
+import Homey from "homey";
 
-class TydomApp extends Homey.App {
+module.exports = class TydomApp extends Homey.App {
 
-  /**
-   * onInit is called when the app is initialized.
-   */
   async onInit() {
-    this.log('MyApp has been initialized');
+    this.log("Delta Dore Tydom 1.0 has been initialized");
+    return Promise.resolve();
   }
 
-}
-
-module.exports = TydomApp;
+};
