@@ -1,0 +1,28 @@
+{
+  "id": "net.evenh.deltadore-tydom",
+  "version": "1.0.0",
+  "compatibility": ">=5.0.0",
+  "sdk": 3,
+  "platforms": [
+    "local"
+  ],
+  "name": {
+    "en": "Delta Dore Tydom"
+  },
+  "description": {
+    "en": "Adds support for the Delta Dore Tydom 1.0 smart hub."
+  },
+  "category": [
+    "appliances"
+  ],
+  "permissions": [],
+  "images": {
+    "small": "/assets/images/small.png",
+    "large": "/assets/images/large.png",
+    "xlarge": "/assets/images/xlarge.png"
+  },
+  "author": {
+    "name": "Even Holthe",
+    "email": "even.holthe@me.com"
+  }
+}
