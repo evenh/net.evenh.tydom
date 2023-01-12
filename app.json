@@ -25,5 +25,57 @@
   "author": {
     "name": "Even Holthe",
     "email": "even.holthe@me.com"
+  },
+  "drivers": [
+    {
+      "name": {
+        "en": "Light"
+      },
+      "class": "light",
+      "capabilities": [
+        "dim",
+        "onoff"
+      ],
+      "platforms": [
+        "local"
+      ],
+      "connectivity": [
+        "lan"
+      ],
+      "images": {
+        "small": "/drivers/light/assets/images/small.png",
+        "large": "/drivers/light/assets/images/large.png",
+        "xlarge": "/drivers/light/assets/images/xlarge.png"
+      },
+      "id": "light"
+    }
+  ],
+  "discovery": {
+    "tydom1": {
+      "type": "mdns-sd",
+      "mdns-sd": {
+        "name": "tydom1",
+        "protocol": "tcp"
+      },
+      "id": "{{txt.SerialNumber}}",
+      "conditions": [
+        [
+          {
+            "field": "txt.Manufacturer",
+            "match": {
+              "type": "string",
+              "value": "DeltaDore"
+            }
+          },
+          {
+            "field": "txt.Model",
+            "match": {
+              "type": "string",
+              "value": "TYDOM 1"
+            }
+          }
+        ]
+      ]
+    }
   }
 }
