@@ -1,12 +1,9 @@
 import Homey from "homey";
 
-class MyDriver extends Homey.Driver {
-
-  /**
-   * onInit is called when the driver is initialized.
-   */
+class LightDriver extends Homey.Driver {
   async onInit() {
-    this.log("MyDriver has been initialized");
+    this.log("Light has been initialized");
+    return Promise.resolve();
   }
 
   /**
@@ -30,4 +27,4 @@ class MyDriver extends Homey.Driver {
 
 }
 
-module.exports = MyDriver;
+module.exports = LightDriver;

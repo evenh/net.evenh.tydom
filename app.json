@@ -54,24 +54,17 @@
     "tydom1": {
       "type": "mdns-sd",
       "mdns-sd": {
-        "name": "tydom1",
+        "name": "https",
         "protocol": "tcp"
       },
       "id": "{{txt.SerialNumber}}",
       "conditions": [
         [
           {
-            "field": "txt.Manufacturer",
+            "field": "txt.manufacturer",
             "match": {
               "type": "string",
               "value": "DeltaDore"
-            }
-          },
-          {
-            "field": "txt.Model",
-            "match": {
-              "type": "string",
-              "value": "TYDOM 1"
             }
           }
         ]

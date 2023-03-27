@@ -1,26 +1,29 @@
-import Homey, {DiscoveryResultMAC, DiscoveryResultMDNSSD, DiscoveryResultSSDP} from "homey";
+import { createClient } from "tydom-client";
+import Homey from "homey";
+import TydomController from "./tydom/controller";
+
+// TODO: Fix this hack
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+process.env.DEBUG = "tydom-client";
 
 module.exports = class TydomApp extends Homey.App {
+  tydom!: TydomController
 
   async onInit() {
     this.log("Delta Dore Tydom 1.0 has been initialized");
 
-    const discoveryStrategy = this.homey.discovery.getStrategy("tydom1");
-
-    // Use the discovery results that were already found
-    const initialDiscoveryResults: { [p: string]: DiscoveryResultMDNSSD | DiscoveryResultSSDP | DiscoveryResultMAC } = discoveryStrategy.getDiscoveryResults();
-    for (const discoveryResult of Object.values(initialDiscoveryResults)) {
-      this.handleDiscoveryResult(discoveryResult);
-    }
-    // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-    this.log(`Total discovered devices: ${Object.values(initialDiscoveryResults)}`);
+    // Replace these with your actual Tydom credentials
+    const username = "mac"; // TODO: Read from mDNS
+    const password = "pw";
+    const hostname = "10.14.20.139";
+    this.tydom = new TydomController({ username, password, hostname });
 
     return Promise.resolve();
   }
 
-
-  handleDiscoveryResult(discoveryResult: DiscoveryResultMDNSSD | DiscoveryResultSSDP | DiscoveryResultMAC) {
-    this.log("Got result:", discoveryResult);
+  async onUninit() {
+    this.log("Stopping app");
+    this.tydom.disconnect();
+    return Promise.resolve();
   }
-
 };
