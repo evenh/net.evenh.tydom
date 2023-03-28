@@ -1,38 +1,58 @@
-import { Categories, ControllerUpdatePayload, TydomAccessoryUpdateContext, TydomDeviceDataUpdateBody } from "./typings";
+/* eslint-disable @typescript-eslint/no-unsafe-assignment,@typescript-eslint/restrict-template-expressions,@typescript-eslint/no-unsafe-call,@typescript-eslint/no-unsafe-member-access,@typescript-eslint/no-unsafe-argument */
+import {
+  asyncWait, getEndpointDetailsFromMeta, getEndpointGroupIdFromGroups, resolveEndpointCategory
+} from "./helpers";
+import {
+  Categories, ControllerUpdatePayload,
+  TydomAccessoryContext,
+  TydomAccessoryUpdateContext, TydomConfigResponse,
+  TydomDeviceDataUpdateBody, TydomGroupsResponse, TydomMetaResponse, TydomPlatformConfig
+} from "./typings";
+import { get } from "lodash";
 import { SimpleClass } from "homey";
-import { TydomClientOptions } from "tydom-client/lib/client";
+import { stringIncludes } from "./util";
 import { TydomHttpMessage, TydomResponse } from "tydom-client/lib/utils/tydom";
 import TydomClient, { createClient } from "tydom-client";
 
+const DEFAULT_REFRESH_INTERVAL_SEC = 4 * 60 * 60; // 4 hours
+
+// TODO: Background sync, scan, refresh
 export default class TydomController extends SimpleClass {
+  private logger: (...args: any[]) => void;
   private apiClient!: TydomClient
-  private hostname: string
-  private username: string
-  private debugMode = true;
+  public config!: TydomPlatformConfig;
+  private refreshInterval?: NodeJS.Timeout;
 
   private devices: Map<string, Categories> = new Map();
   private state: Map<string, unknown> = new Map();
 
-  constructor(options: TydomClientOptions) {
+  constructor(logger: (...args: any[]) => void, config: TydomPlatformConfig) {
     super();
+    this.logger = logger;
+    this.config = config;
 
-    this.hostname = options.hostname || "mediation.tydom.com";
-    this.username = options.username;
-
-    this.apiClient = createClient(options);
+    const { hostname, username, password } = config;
+    this.apiClient = createClient({
+      hostname: hostname,
+      username: username,
+      password: password,
+      followUpDebounce: 500,
+    });
     this.connect();
 
     this.apiClient.on("connect", () => {
-      this.log(`Successfully connected to Tydom hostname=${this.hostname} with username=${this.username}`);
+      this.logger(`Successfully connected to Tydom hostname=${hostname} with username=${username}`);
     });
-    this.apiClient.on("connect", () => {
-      this.log(`Disconnected from Tydom hostname=${this.hostname}`);
+    this.apiClient.on("disconnect", () => {
+      this.logger(`Disconnected from Tydom hostname=${hostname}`);
     });
     this.apiClient.on("message", (message: TydomHttpMessage) => {
       try {
         this.handleMessage(message);
-      } catch (err) {
-        this.log(`Encountered an uncaught error while processing message=${JSON.stringify(message)}`);
+      }
+      catch (err) {
+        this.logger(`Encountered an uncaught error while processing message=${JSON.stringify(message)}`);
+        this.debug(`${err instanceof Error ? err.stack : err}`);
       }
     });
   }
@@ -40,23 +60,30 @@ export default class TydomController extends SimpleClass {
   private getUniqueId(deviceId: number, endpointId: number): string {
     return deviceId === endpointId ? `${deviceId}` : `${deviceId}:${endpointId}`;
   }
+
   private getAccessoryId(deviceId: number, endpointId: number): string {
-    return `tydom:${this.username.slice(6)}:accessories:${this.getUniqueId(deviceId, endpointId)}`;
+    return `tydom:${this.config.username.slice(6)}:accessories:${this.getUniqueId(deviceId, endpointId)}`;
   }
 
   // Perform the connection and validation logic
   private connect() {
     this.apiClient.connect()
+      .then(() => asyncWait(250))
       .then(() => this.apiClient.get("/ping"))
       .catch(err => {
-        this.log(`Failed to connect to Tydom hostname=${this.hostname} with username="${this.username}"`);
+        this.logger(`Failed to connect to Tydom hostname=${this.config.hostname} with username="${this.config.username}"`);
         throw err;
       });
   }
 
+  public disconnect() {
+    this.debug("Terminating connection to gateway");
+    this.apiClient.close();
+  }
+
   // Every message from Tydom gets checked here
   private handleMessage(message: TydomHttpMessage): void {
-    const {uri, method, body} = message;
+    const { uri, method, body } = message;
     const isDeviceUpdate = uri === "/devices/data" && method === "PUT";
     if (isDeviceUpdate) {
       this.handleDeviceDataUpdate(body, "data");
@@ -77,9 +104,9 @@ export default class TydomController extends SimpleClass {
     }
 
     (body as TydomDeviceDataUpdateBody).forEach(device => {
-      const {id: deviceId, endpoints} = device;
+      const { id: deviceId, endpoints } = device;
       for (const endpoint of endpoints) {
-        const {id: endpointId, data, cdata} = endpoint;
+        const { id: endpointId, data, cdata } = endpoint;
         const updates = type === "data" ? data : cdata;
         const uniqueId = this.getUniqueId(deviceId, endpointId);
         if (!this.devices.has(uniqueId)) {
@@ -104,14 +131,113 @@ export default class TydomController extends SimpleClass {
     });
   }
 
+  async sync(): Promise<{config: TydomConfigResponse; groups: TydomGroupsResponse; meta: TydomMetaResponse}> {
+    const { hostname, refreshInterval = DEFAULT_REFRESH_INTERVAL_SEC } = this.config;
+    this.debug(`Syncing state from hostname=${hostname}...`);
+    const config = await this.apiClient.get<TydomConfigResponse>("/configs/file");
+    const groups = await this.apiClient.get<TydomGroupsResponse>("/groups/file");
+    const meta = await this.apiClient.get<TydomMetaResponse>("/devices/meta");
+    // Final outro handshake
+    await this.refresh();
+    if (this.refreshInterval) {
+      this.debug("Removing existing refresh interval");
+      clearInterval(this.refreshInterval);
+    }
+    this.debug(`Configuring refresh interval of ${Math.round(refreshInterval)}s`);
+    this.refreshInterval = setInterval(async() => {
+      try {
+        await this.refresh();
+      }
+      catch (err) {
+        this.debug("Failed interval refresh with err", err);
+      }
+    }, refreshInterval * 1000);
+    Object.assign(this.state, { config, groups, meta });
+    return { config, groups, meta };
+  }
+  async scan(): Promise<void> {
+    this.logger(`Scanning devices from hostname=${this.config.hostname}...`);
+    const {
+      settings = {},
+      includedDevices = [],
+      excludedDevices = [],
+      includedCategories = [],
+      excludedCategories = []
+    } = this.config;
+    const { config, groups, meta } = await this.sync();
+    const { endpoints, groups: configGroups } = config;
+    endpoints.forEach(endpoint => {
+      const {
+        id_endpoint: endpointId, id_device: deviceId, name: deviceName, first_usage: firstUsage
+      } = endpoint;
+      const uniqueId = this.getUniqueId(deviceId, endpointId);
+      const { metadata } = getEndpointDetailsFromMeta(endpoint, meta);
+      const groupId = getEndpointGroupIdFromGroups(endpoint, groups);
+      const group = groupId ? configGroups.find(({ id }) => id === groupId) : undefined;
+      const deviceSettings = settings[deviceId] || {};
+      const categoryFromSettings = deviceSettings.category;
+      // @TODO resolve endpoint productType
+      this.logger(`Found new device with firstUsage=${firstUsage}, deviceId=${deviceId} and endpointId=${endpointId}`);
+      if (includedDevices.length && !stringIncludes(includedDevices, deviceId)) {
+        return;
+      }
+      if (excludedDevices.length && stringIncludes(excludedDevices, deviceId)) {
+        return;
+      }
+      const category = categoryFromSettings || resolveEndpointCategory({ firstUsage, metadata, settings: deviceSettings });
+      if (!category) {
+        this.warn(`Unsupported firstUsage="${firstUsage}" for endpoint with deviceId="${deviceId}"`);
+        this.debug({ endpoint });
+        return;
+      }
+      if (includedCategories.length && !stringIncludes(includedCategories, category)) {
+        return;
+      }
+      if (excludedCategories.length && stringIncludes(excludedCategories, category)) {
+        return;
+      }
+      if (!this.devices.has(uniqueId)) {
+        this.logger(`Adding new device with firstUsage=${firstUsage}, deviceId=${deviceId} and endpointId=${endpointId}`);
+        const accessoryId = this.getAccessoryId(deviceId, endpointId);
+        const nameFromSetting = get(settings, `${deviceId}.name`) as string | undefined;
+        const name = nameFromSetting || deviceName;
+        this.devices.set(uniqueId, category);
+        const context: TydomAccessoryContext = {
+          name,
+          category,
+          metadata,
+          settings: deviceSettings,
+          group,
+          deviceId,
+          endpointId,
+          accessoryId,
+          manufacturer: "Delta Dore",
+          serialNumber: `ID${deviceId}`,
+          // model: 'N/A',
+          state: {}
+        };
+        this.emit("device", context);
+      }
+    });
+  }
+  async refresh(): Promise<unknown> {
+    this.debug("Refreshing Tydom controller ...");
+    return await this.apiClient.post("/refresh/all");
+  }
+
   public debug(...args: any[]) {
-    if (this.debugMode) {
-      this.log("[DEBUG]", args);
+    if (this.config.debug) {
+      this.logger("[DEBUG]", args);
     }
   }
 
-  public disconnect() {
-    this.debug("Terminating connection to gateway");
-    this.apiClient.close();
+  public warn(...args: any[]) {
+    if (this.config.debug) {
+      this.logger("[WARN]", args);
+    }
+  }
+
+  public foo() {
+    return this.devices;
   }
 }

@@ -1,4 +1,6 @@
-import { createClient } from "tydom-client";
+import {open} from "inspector";
+open(9229, "0.0.0.0");
+
 import Homey from "homey";
 import TydomController from "./tydom/controller";
 
@@ -7,7 +9,7 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 process.env.DEBUG = "tydom-client";
 
 module.exports = class TydomApp extends Homey.App {
-  tydom!: TydomController
+  private tydom!: TydomController
 
   async onInit() {
     this.log("Delta Dore Tydom 1.0 has been initialized");
@@ -16,7 +18,14 @@ module.exports = class TydomApp extends Homey.App {
     const username = "mac"; // TODO: Read from mDNS
     const password = "pw";
     const hostname = "10.14.20.139";
-    this.tydom = new TydomController({ username, password, hostname });
+    // eslint-disable-next-line
+    this.tydom = new TydomController(this.log, {
+      settings: {},
+      debug: true,
+      username: username,
+      password: password,
+      hostname: hostname
+    });
 
     return Promise.resolve();
   }
@@ -25,5 +34,9 @@ module.exports = class TydomApp extends Homey.App {
     this.log("Stopping app");
     this.tydom.disconnect();
     return Promise.resolve();
+  }
+
+  public controller(): TydomController {
+    return this.tydom;
   }
 };

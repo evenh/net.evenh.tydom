@@ -47,6 +47,12 @@
         "large": "/drivers/light/assets/images/large.png",
         "xlarge": "/drivers/light/assets/images/xlarge.png"
       },
+      "pair": [
+        {
+          "id": "list_devices",
+          "template": "list_devices"
+        }
+      ],
       "id": "light"
     }
   ],
