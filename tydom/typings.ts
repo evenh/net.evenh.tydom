@@ -1,5 +1,5 @@
 /* eslint-disable no-use-before-define */
-type UnknownObject = Record<string, unknown>;
+export type UnknownObject = Record<string, unknown>;
 
 export type TydomAccessoryContext<T extends UnknownObject = UnknownObject, U extends UnknownObject = UnknownObject> = {
   accessoryId: string;

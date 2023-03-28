@@ -1,29 +1,34 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment,@typescript-eslint/restrict-template-expressions,@typescript-eslint/no-unsafe-call,@typescript-eslint/no-unsafe-member-access,@typescript-eslint/no-unsafe-argument */
+import {asyncWait, getEndpointDetailsFromMeta, getEndpointGroupIdFromGroups, resolveEndpointCategory} from "./helpers";
+import {EventEmitter} from "events";
+import {get} from "lodash";
+import {stringIncludes} from "./util";
+import {TydomHttpMessage, TydomResponse} from "tydom-client/lib/utils/tydom";
 import {
-  asyncWait, getEndpointDetailsFromMeta, getEndpointGroupIdFromGroups, resolveEndpointCategory
-} from "./helpers";
-import {
-  Categories, ControllerUpdatePayload,
+  Categories,
+  ControllerUpdatePayload,
   TydomAccessoryContext,
-  TydomAccessoryUpdateContext, TydomConfigResponse,
-  TydomDeviceDataUpdateBody, TydomGroupsResponse, TydomMetaResponse, TydomPlatformConfig
+  TydomAccessoryUpdateContext,
+  TydomConfigResponse,
+  TydomDeviceDataUpdateBody,
+  TydomGroupsResponse,
+  TydomMetaResponse,
+  TydomPlatformConfig,
+  UnknownObject
 } from "./typings";
-import { get } from "lodash";
-import { SimpleClass } from "homey";
-import { stringIncludes } from "./util";
-import { TydomHttpMessage, TydomResponse } from "tydom-client/lib/utils/tydom";
-import TydomClient, { createClient } from "tydom-client";
+import TydomClient, {createClient} from "tydom-client";
 
 const DEFAULT_REFRESH_INTERVAL_SEC = 4 * 60 * 60; // 4 hours
 
 // TODO: Background sync, scan, refresh
-export default class TydomController extends SimpleClass {
-  private logger: (...args: any[]) => void;
+export default class TydomController extends EventEmitter {
+  private readonly logger: (...args: any[]) => void;
   private apiClient!: TydomClient
   public config!: TydomPlatformConfig;
   private refreshInterval?: NodeJS.Timeout;
 
-  private devices: Map<string, Categories> = new Map();
+  private devicesInCategories: Map<string, Categories> = new Map();
+  private devices: Map<string, TydomAccessoryContext> = new Map();
   private state: Map<string, unknown> = new Map();
 
   constructor(logger: (...args: any[]) => void, config: TydomPlatformConfig) {
@@ -38,13 +43,14 @@ export default class TydomController extends SimpleClass {
       password: password,
       followUpDebounce: 500,
     });
-    this.connect();
 
     this.apiClient.on("connect", () => {
       this.logger(`Successfully connected to Tydom hostname=${hostname} with username=${username}`);
+      this.emit("connect");
     });
     this.apiClient.on("disconnect", () => {
       this.logger(`Disconnected from Tydom hostname=${hostname}`);
+      this.emit("disconnect");
     });
     this.apiClient.on("message", (message: TydomHttpMessage) => {
       try {
@@ -66,14 +72,15 @@ export default class TydomController extends SimpleClass {
   }
 
   // Perform the connection and validation logic
-  private connect() {
-    this.apiClient.connect()
-      .then(() => asyncWait(250))
-      .then(() => this.apiClient.get("/ping"))
-      .catch(err => {
-        this.logger(`Failed to connect to Tydom hostname=${this.config.hostname} with username="${this.config.username}"`);
-        throw err;
-      });
+  async connect() {
+    try {
+      await this.apiClient.connect();
+      await asyncWait(250);
+      await this.apiClient.get("/ping");
+    } catch (err) {
+      this.logger(`Failed to connect to Tydom hostname=${this.config.hostname} with username="${this.config.username}"`);
+      throw err;
+    }
   }
 
   public disconnect() {
@@ -109,11 +116,11 @@ export default class TydomController extends SimpleClass {
         const { id: endpointId, data, cdata } = endpoint;
         const updates = type === "data" ? data : cdata;
         const uniqueId = this.getUniqueId(deviceId, endpointId);
-        if (!this.devices.has(uniqueId)) {
+        if (!this.devicesInCategories.has(uniqueId)) {
           this.debug(`←PUT:ignored for device id=${deviceId} and endpointId=${endpointId}`);
           return;
         }
-        const category = this.devices.get(uniqueId) ?? Categories.OTHER;
+        const category = this.devicesInCategories.get(uniqueId) ?? Categories.OTHER;
         const accessoryId = this.getAccessoryId(deviceId, endpointId);
         this.debug(`←PUT:update for deviceId=${deviceId} and endpointId=${endpointId}, updates:\n`, updates);
         const context: TydomAccessoryUpdateContext = {
@@ -196,12 +203,12 @@ export default class TydomController extends SimpleClass {
       if (excludedCategories.length && stringIncludes(excludedCategories, category)) {
         return;
       }
-      if (!this.devices.has(uniqueId)) {
+      if (!this.devicesInCategories.has(uniqueId)) {
         this.logger(`Adding new device with firstUsage=${firstUsage}, deviceId=${deviceId} and endpointId=${endpointId}`);
         const accessoryId = this.getAccessoryId(deviceId, endpointId);
         const nameFromSetting = get(settings, `${deviceId}.name`) as string | undefined;
         const name = nameFromSetting || deviceName;
-        this.devices.set(uniqueId, category);
+        this.devicesInCategories.set(uniqueId, category);
         const context: TydomAccessoryContext = {
           name,
           category,
@@ -216,6 +223,7 @@ export default class TydomController extends SimpleClass {
           // model: 'N/A',
           state: {}
         };
+        this.devices.set(uniqueId, context);
         this.emit("device", context);
       }
     });
@@ -225,19 +233,26 @@ export default class TydomController extends SimpleClass {
     return await this.apiClient.post("/refresh/all");
   }
 
-  public debug(...args: any[]) {
+  private debug(...args: any[]) {
     if (this.config.debug) {
       this.logger("[DEBUG]", args);
     }
   }
 
-  public warn(...args: any[]) {
+  private warn(...args: any[]) {
     if (this.config.debug) {
       this.logger("[WARN]", args);
     }
   }
 
-  public foo() {
-    return this.devices;
+  public getDevicesForCategory(category: Categories): (TydomAccessoryContext<UnknownObject, UnknownObject> | undefined)[] {
+    const items = [];
+    for (const entry of this.devicesInCategories.entries()) {
+      if (entry[1] === category) {
+        items.push(entry[0]);
+      }
+    }
+
+    return items.map(id => this.devices.get(id));
   }
 }
