@@ -46,7 +46,11 @@ module.exports = class TydomApp extends Homey.App {
     return this.controller.getDevicesForCategory(category).map(v => {
       return {
         name: v?.name,
-        data: {id: v?.accessoryId}
+        data: {
+          id: v?.accessoryId,
+          deviceId: v?.deviceId,
+          endpointId: v?.endpointId,
+        }
       };
     });
   }

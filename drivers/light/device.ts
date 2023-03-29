@@ -10,16 +10,17 @@ class Light extends Homey.Device {
     this.registerMultipleCapabilityListener(["onoff", "dim"], async({ onoff, dim }) => {
       if (dim > 0 && onoff === false) {
         this.log("Wants to turn off");
-        // await DeviceApi.setOnOffAsync(false); // turn off
+        await this.setStoreValue("dim", dim);
+        await this.setLevel(0.0);
       }
       else if (dim <= 0 && onoff === true) {
         this.log("Wants to turn on");
-        // await DeviceApi.setOnOffAsync(true); // turn on
+        const oldDimValue: number = <number>this.getStoreValue("dim") || 1.0;
+        await this.setLevel(oldDimValue);
       }
       else {
         // eslint-disable-next-line
-        this.log(`dim=${dim}, onoff=${onoff}`);
-        // await DeviceApi.setOnOffAndDimAsync({ onoff, dim }); // turn on or off and set dim level in one command
+        await this.setLevel(dim);
       }
     });
 
@@ -33,6 +34,19 @@ class Light extends Homey.Device {
     return Promise.resolve();
   }
 
+  private async setLevel(level: number) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call,@typescript-eslint/no-unsafe-member-access
+    // @ts-ignore
+    await this.homey.app.controller.updateLightLevel(this.getData().deviceId, this.getData().endpointId, level * 100);
+  }
+
+  async onUninit() {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+    // @ts-ignore
+    this.homey.app.removeSubscription(this.getData().id);
+    return Promise.resolve();
+  }
+
   async onTydomStateChange(newRemoteState: TydomDataElement) {
     if (newRemoteState.validity === "expired") {
       return Promise.resolve();
@@ -43,6 +57,7 @@ class Light extends Homey.Device {
       const isOn = newRemoteState.value > 0;
       const dimValue = <number>newRemoteState.value / 100;
 
+      await this.setStoreValue("lastDim", dimValue);
       await this.setCapabilityValue("onoff", isOn).catch(err => this.error(err));
       await this.setCapabilityValue("dim", dimValue).catch(err => this.error(err));
     }

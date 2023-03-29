@@ -14,9 +14,7 @@ class LightDriver extends Homey.Driver {
   async onPairListDevices() {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call,@typescript-eslint/no-unsafe-member-access
     // @ts-ignore
-    let devices = this.homey.app.getDevices(Categories.LIGHTBULB);
-    this.log(devices);
-    return devices;
+    return this.homey.app.getDevices(Categories.LIGHTBULB);
     // Example device data, note that `store` is optional
     // {
     //   name: 'My Device',
