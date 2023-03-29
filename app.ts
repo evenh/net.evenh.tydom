@@ -1,4 +1,4 @@
-import {Categories, ControllerUpdatePayload, TydomAccessoryContext} from "./tydom/typings";
+import {Categories, ControllerUpdatePayload, TydomAccessoryContext, TydomDataElement} from "./tydom/typings";
 import {open} from "inspector";
 import assert from "assert";
 import Homey from "homey";
@@ -12,7 +12,7 @@ process.env.DEBUG = "tydom-client";
 
 module.exports = class TydomApp extends Homey.App {
   private controller!: TydomController
-  private subscribers: Map<string, (...args: any[]) => void> = new Map();
+  private subscribers: Map<string, (update: TydomDataElement) => void> = new Map();
 
   async onInit() {
     this.log("Delta Dore Tydom 1.0 has been initialized");
@@ -51,7 +51,7 @@ module.exports = class TydomApp extends Homey.App {
     });
   }
 
-  public subscribeTo(id: string, fn: (...args: any[]) => void) {
+  public subscribeTo(id: string, fn: (update: TydomDataElement) => void) {
     this.log(`Adding subscriber for ID=${id}`);
     this.subscribers.set(id, fn);
   }
@@ -71,7 +71,9 @@ module.exports = class TydomApp extends Homey.App {
     try {
       const fn = this.subscribers.get(update.context.accessoryId);
       if (fn) {
-        update.updates.forEach(fn);
+        update.updates
+          .map(u => <TydomDataElement>u)
+          .forEach(fn);
       }
       return Promise.resolve();
     } catch (err) {
