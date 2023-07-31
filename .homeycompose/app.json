@@ -1,6 +1,6 @@
 {
   "id": "net.evenh.deltadore-tydom",
-  "version": "1.0.0",
+  "version": "3.0.0",
   "compatibility": ">=5.0.0",
   "sdk": 3,
   "platforms": [

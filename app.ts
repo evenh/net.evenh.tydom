@@ -1,87 +1,45 @@
-import {Categories, ControllerUpdatePayload, TydomAccessoryContext, TydomDataElement} from "./tydom/typings";
-import {open} from "inspector";
-import assert from "assert";
-import Homey from "homey";
-import TydomController from "./tydom/controller";
+import { open } from 'inspector';
+import assert from 'assert';
+import { App } from 'homey';
+import TydomController from './tydom/controller';
+import { DefaultLogger } from './tydom/util';
 
-open(9229, "0.0.0.0");
+open(9229, '0.0.0.0');
 
 // TODO: Fix this hack
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-process.env.DEBUG = "tydom-client";
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+process.env.DEBUG = 'tydom-client';
 
-module.exports = class TydomApp extends Homey.App {
-  private controller!: TydomController
-  private subscribers: Map<string, (update: TydomDataElement) => void> = new Map();
-
+class TydomApp extends App {
+  private controller!: TydomController;
   async onInit() {
-    this.log("Delta Dore Tydom 1.0 has been initialized");
+    this.log('Delta Dore Tydom 1.0 has been initialized');
 
-    const username = "mac"; // TODO: Read from mDNS
-    const password = "pw";
     // TODO: Replace these with your actual Tydom credentials
-    const hostname = "10.14.20.139";
+    const hostname = '1.2.3.4';
+    const username = 'mac'; // TODO: Read from mDNS
+    const password = 'pw';
+    const logger = new DefaultLogger(this.log, this.error, true);
+
     // eslint-disable-next-line
-    this.controller = new TydomController(this.log, {
+    this.controller = TydomController.createInstance(logger,{
       settings: {},
       debug: true,
-      username: username,
-      password: password,
-      hostname: hostname
+      username,
+      password,
+      hostname,
     });
 
-    return this.didFinishLaunching();
-  }
-
-  private async didFinishLaunching() {
     assert(this.controller);
     await this.controller.connect();
     await this.controller.scan();
-    this.controller.on("update", async(update: ControllerUpdatePayload) => {
-      await this.handleUpdates(update);
-    });
-  }
-
-  public getDevices(category: Categories) {
-    return this.controller.getDevicesForCategory(category).map(v => {
-      return {
-        name: v?.name,
-        data: {
-          id: v?.accessoryId,
-          deviceId: v?.deviceId,
-          endpointId: v?.endpointId,
-        }
-      };
-    });
-  }
-
-  public subscribeTo(id: string, fn: (update: TydomDataElement) => void) {
-    this.log(`Adding subscriber for ID=${id}`);
-    this.subscribers.set(id, fn);
-  }
-
-  public removeSubscription(id: string) {
-    this.log(`Removing subscriber for ID=${id}`);
-    this.subscribers.delete(id);
   }
 
   async onUninit() {
-    this.log("Stopping app");
+    this.log('Stopping app');
     this.controller.disconnect();
     return Promise.resolve();
   }
+}
 
-  private async handleUpdates(update: ControllerUpdatePayload) {
-    try {
-      const fn = this.subscribers.get(update.context.accessoryId);
-      if (fn) {
-        update.updates
-          .map(u => <TydomDataElement>u)
-          .forEach(fn);
-      }
-      return Promise.resolve();
-    } catch (err) {
-      return Promise.reject(err);
-    }
-  }
-};
+module.exports = TydomApp;

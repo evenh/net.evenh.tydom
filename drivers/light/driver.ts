@@ -1,9 +1,12 @@
-import Homey from "homey";
-import { Categories } from "../../tydom/typings";
+import Homey from 'homey';
+import { Categories } from '../../tydom/typings';
+import TydomController from '../../tydom/controller';
 
 class LightDriver extends Homey.Driver {
+  private api!: TydomController;
   async onInit() {
-    this.log("Light has been initialized");
+    this.api = await TydomController.getInstance();
+    this.log('LightDriver has been initialized');
     return Promise.resolve();
   }
 
@@ -12,9 +15,7 @@ class LightDriver extends Homey.Driver {
    * This should return an array with the data of devices that are available for pairing.
    */
   async onPairListDevices() {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call,@typescript-eslint/no-unsafe-member-access
-    // @ts-ignore
-    return this.homey.app.getDevices(Categories.LIGHTBULB);
+    return this.api.getDevices(Categories.LIGHTBULB);
     // Example device data, note that `store` is optional
     // {
     //   name: 'My Device',
@@ -26,7 +27,6 @@ class LightDriver extends Homey.Driver {
     //   },
     // },
   }
-
 }
 
 module.exports = LightDriver;
