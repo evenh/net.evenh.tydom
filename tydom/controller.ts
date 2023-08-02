@@ -336,16 +336,36 @@ export default class TydomController extends EventEmitter {
     endpointId: string,
     level: number,
   ) {
-    await this.doPut(deviceId, endpointId)(level);
+    await this.doPut(deviceId, endpointId, 'level')(level);
+  }
+
+  public async updateThermostatTemperature(
+    deviceId: string,
+    endpointId: string,
+    temperature: number,
+  ) {
+    await this.doPut(deviceId, endpointId, 'setpoint')(temperature);
+  }
+
+  public async updateThermostatState(
+    deviceId: string,
+    endpointId: string,
+    enabled: boolean,
+  ) {
+    await this.doPut(
+      deviceId,
+      endpointId,
+      'hvacMode',
+    )(enabled ? 'NORMAL' : 'STOP');
   }
 
   public subscribeTo(id: string, fn: (update: TydomDataElement) => void) {
-    this.log.info(`Adding subscriber for ID=${id}`);
+    this.log.debug(`Adding subscriber for ID=${id}`);
     this.subscribers.set(id, fn);
   }
 
   public removeSubscription(id: string) {
-    this.log.info(`Removing subscriber for ID=${id}`);
+    this.log.debug(`Removing subscriber for ID=${id}`);
     this.subscribers.delete(id);
   }
 
@@ -371,14 +391,14 @@ export default class TydomController extends EventEmitter {
     }
   }
 
-  private doPut(deviceId: string, endpointId: string) {
+  private doPut(deviceId: string, endpointId: string, updateType: string) {
     return debounce(
-      async (value: number) => {
+      async (value: unknown) => {
         await this.apiClient.put(
           `/devices/${deviceId}/endpoints/${endpointId}/data`,
           [
             {
-              name: 'level',
+              name: updateType,
               value,
             },
           ],

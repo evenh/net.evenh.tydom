@@ -61,6 +61,42 @@
         }
       ],
       "id": "light"
+    },
+    {
+      "name": {
+        "en": "Thermostat"
+      },
+      "class": "thermostat",
+      "capabilities": [
+        "target_temperature",
+        "measure_temperature",
+        "onoff"
+      ],
+      "platforms": [
+        "local"
+      ],
+      "connectivity": [
+        "lan"
+      ],
+      "images": {
+        "small": "/drivers/thermostat/assets/images/small.png",
+        "large": "/drivers/thermostat/assets/images/large.png",
+        "xlarge": "/drivers/thermostat/assets/images/xlarge.png"
+      },
+      "pair": [
+        {
+          "id": "list_devices",
+          "template": "list_devices",
+          "navigation": {
+            "next": "add_devices"
+          }
+        },
+        {
+          "id": "add_devices",
+          "template": "add_devices"
+        }
+      ],
+      "id": "thermostat"
     }
   ],
   "discovery": {

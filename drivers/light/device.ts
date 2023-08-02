@@ -6,9 +6,6 @@ import TydomController from '../../tydom/controller';
 class Light extends Device {
   api!: TydomController;
 
-  /**
-   * onInit is called when the device is initialized.
-   */
   async onInit() {
     this.api = await TydomController.getInstance();
 
@@ -37,13 +34,11 @@ class Light extends Device {
     );
 
     this.log('Light has been initialized');
-    return Promise.resolve();
   }
 
   // Clean up OOB level changes.
   async onUninit() {
     this.api.removeSubscription(this.getData().id);
-    return Promise.resolve();
   }
 
   private async setLevel(level: number) {
@@ -77,35 +72,20 @@ class Light extends Device {
     );
   }
 
-  /**
-   * onAdded is called when the user adds the device, called just after pairing.
-   */
   async onAdded() {
     this.log('Light has been added');
-    return Promise.resolve();
   }
 
-  /**
-   * onSettings is called when the user updates the device's settings.
-   * @param {object} event the onSettings event data
-   * @param {object} event.oldSettings The old settings object
-   * @param {object} event.newSettings The new settings object
-   * @param {string[]} event.changedKeys An array of keys changed since the previous version
-   * @returns {Promise<string|void>} return a custom message that will be displayed
-   */
   async onSettings({ oldSettings: {}, newSettings: {}, changedKeys: {}}): Promise<void> {
     this.log('Light settings where changed');
-    return Promise.resolve();
   }
 
   async onRenamed(name: string) {
     this.log(`Light was renamed to ${name}`);
-    return Promise.resolve();
   }
 
   async onDeleted() {
     this.log('Light has been deleted');
-    return Promise.resolve();
   }
 }
 
