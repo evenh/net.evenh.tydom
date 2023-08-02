@@ -12,19 +12,30 @@ process.env.DEBUG = 'tydom-client';
 
 class TydomApp extends App {
   private controller!: TydomController;
+  private debug = true;
   async onInit() {
     this.log('Delta Dore Tydom 1.0 has been initialized');
 
+    if (this.debug) {
+      try {
+        // eslint-disable-next-line global-require,@typescript-eslint/no-var-requires
+        require('inspector').waitForDebugger();
+      } catch (error) {
+        // eslint-disable-next-line global-require,@typescript-eslint/no-var-requires
+        require('inspector').open(9229, '0.0.0.0', true);
+      }
+    }
     // TODO: Replace these with your actual Tydom credentials
     const hostname = '1.2.3.4';
     const username = 'mac'; // TODO: Read from mDNS
     const password = 'pw';
     const logger = new DefaultLogger(this.log, this.error, true);
+    const logger = new DefaultLogger(this.log, this.error, this.debug);
 
     // eslint-disable-next-line
     this.controller = TydomController.createInstance(logger,{
       settings: {},
-      debug: true,
+      debug: this.debug,
       username,
       password,
       hostname,
