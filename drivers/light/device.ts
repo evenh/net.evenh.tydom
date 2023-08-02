@@ -5,6 +5,7 @@ import TydomController from '../../tydom/controller';
 
 class Light extends Device {
   api!: TydomController;
+
   /**
    * onInit is called when the device is initialized.
    */
@@ -14,22 +15,20 @@ class Light extends Device {
     this.registerMultipleCapabilityListener(
       ['onoff', 'dim'],
       async ({ onoff, dim }) => {
-        if (dim > 0 && onoff === false) {
-          this.log('Wants to turn off');
-          await this.setStoreValue('dim', dim);
+        if (dim === undefined && onoff === false) {
           await this.setLevel(0.0);
-        } else if (dim <= 0 && onoff === true) {
-          this.log('Wants to turn on');
+        } else if (dim === undefined && onoff === true) {
           const oldDimValue: number = <number>this.getStoreValue('dim') || 1.0;
           await this.setLevel(oldDimValue);
         } else {
           // eslint-disable-next-line
-        await this.setLevel(dim);
+          await this.setLevel(dim);
         }
       },
+      500,
     );
 
-    // eslint-disable-next-line @typescript-eslint/unbound-method,@typescript-eslint/no-unsafe-member-access,@typescript-eslint/no-unsafe-call
+    // Receive out-of-band level changes, e.g. performed with physical controls.
     this.api.subscribeTo(
       this.getData().id,
       async (update: TydomDataElement) => {
@@ -41,37 +40,41 @@ class Light extends Device {
     return Promise.resolve();
   }
 
-  private async setLevel(level: number) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const { deviceId, endpointId } = this.getData();
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-    await this.api.updateLightLevel(deviceId, endpointId, level * 100);
-  }
-
+  // Clean up OOB level changes.
   async onUninit() {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     this.api.removeSubscription(this.getData().id);
     return Promise.resolve();
   }
 
-  async onTydomStateChange(newRemoteState: TydomDataElement) {
+  private async setLevel(level: number) {
+    const { deviceId, endpointId } = this.getData();
+    await this.api
+      .updateLightLevel(deviceId, endpointId, level * 100)
+      .then(async () => {
+        await this.updateCapabilityValue(level * 100);
+      });
+  }
+
+  private async onTydomStateChange(newRemoteState: TydomDataElement) {
     if (newRemoteState.validity === 'expired') return Promise.resolve();
 
     // Check if the new value is a number
-    if (isFinite(newRemoteState.value)) {
-      const isOn = newRemoteState.value > 0;
-      const dimValue = <number>newRemoteState.value / 100;
-
-      await this.setStoreValue('lastDim', dimValue);
-      await this.setCapabilityValue('onoff', isOn).catch((err) =>
-        this.error(err),
-      );
-      await this.setCapabilityValue('dim', dimValue).catch((err) =>
-        this.error(err),
-      );
-    }
+    if (isFinite(newRemoteState.value))
+      await this.updateCapabilityValue(<number>newRemoteState.value);
 
     return Promise.resolve();
+  }
+
+  private async updateCapabilityValue(newValue: number) {
+    const isOn = newValue > 0;
+    const dimValue = newValue / 100;
+
+    await this.setCapabilityValue('onoff', isOn).catch((err) =>
+      this.error(err),
+    );
+    await this.setCapabilityValue('dim', dimValue).catch((err) =>
+      this.error(err),
+    );
   }
 
   /**
@@ -90,8 +93,7 @@ class Light extends Device {
    * @param {string[]} event.changedKeys An array of keys changed since the previous version
    * @returns {Promise<string|void>} return a custom message that will be displayed
    */
-  // eslint-disable-next-line no-empty-pattern
-  async onSettings({oldSettings: {}, newSettings: {}, changedKeys: {}}): Promise<string | void> {
+  async onSettings({ oldSettings: {}, newSettings: {}, changedKeys: {}}): Promise<void> {
     this.log('Light settings where changed');
     return Promise.resolve();
   }
@@ -104,11 +106,6 @@ class Light extends Device {
   async onDeleted() {
     this.log('Light has been deleted');
     return Promise.resolve();
-  }
-
-  private logId() {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access,@typescript-eslint/restrict-template-expressions
-    return `name=${this.getData().name} tydomId=${this.getData().id}`;
   }
 }
 

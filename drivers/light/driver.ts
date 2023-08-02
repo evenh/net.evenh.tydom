@@ -16,16 +16,6 @@ class LightDriver extends Homey.Driver {
    */
   async onPairListDevices() {
     return this.api.getDevices(Categories.LIGHTBULB);
-    // Example device data, note that `store` is optional
-    // {
-    //   name: 'My Device',
-    //   data: {
-    //     id: 'my-device',
-    //   },
-    //   store: {
-    //     address: '127.0.0.1',
-    //   },
-    // },
   }
 }
 
