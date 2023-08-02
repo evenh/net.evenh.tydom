@@ -1,5 +1,5 @@
 {
-  "name": "net.evenh.deltadore-tydom",
+  "name": "net.evenh.tydom",
   "version": "1.0.0",
   "main": "app.ts",
   "scripts": {
